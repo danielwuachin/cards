@@ -6,6 +6,11 @@ export const pool = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
+        // RDS rejects unencrypted connections (pg_hba.conf "no encryption" error).
+        // rejectUnauthorized: false skips CA chain validation of RDS's cert — the
+        // channel is still encrypted, but the server identity isn't verified.
+        // For full verification, bundle the RDS CA cert and pass it as `ca` here.
+        ssl: { rejectUnauthorized: false },
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
