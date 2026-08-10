@@ -27,25 +27,25 @@ export abstract class AppError extends Error {
 }
 
 export class BadRequestError extends AppError {
-  readonly type = 'https://api.cards.local/errors/bad-request';
+  readonly type = 'https://api.danviviendo.com/errors/bad-request';
   readonly title = 'Bad Request';
   readonly status = 400;
 }
 
 export class NotFoundError extends AppError {
-  readonly type = 'https://api.cards.local/errors/not-found';
+  readonly type = 'https://api.danviviendo.com/errors/not-found';
   readonly title = 'Not Found';
   readonly status = 404;
 }
 
 export class ConflictError extends AppError {
-  readonly type = 'https://api.cards.local/errors/conflict';
+  readonly type = 'https://api.danviviendo.com/errors/conflict';
   readonly title = 'Conflict';
   readonly status = 409;
 }
 
 export class InternalServerError extends AppError {
-  readonly type = 'https://api.cards.local/errors/internal-error';
+  readonly type = 'https://api.danviviendo.com/errors/internal-error';
   readonly title = 'Internal Server Error';
   readonly status = 500;
 }

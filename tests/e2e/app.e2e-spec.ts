@@ -49,7 +49,7 @@ describe('Express API Endpoints & E2E (Supertest)', () => {
       expect(response.status).toBe(400);
       expect(response.type).toContain('application/problem+json');
       expect(response.body).toEqual({
-        type: 'https://api.cards.local/errors/bad-request',
+        type: 'https://api.danviviendo.com/errors/bad-request',
         title: 'Bad Request',
         status: 400,
         detail: 'The provided PAN failed the Luhn checksum validation algorithm',

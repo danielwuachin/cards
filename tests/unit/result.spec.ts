@@ -22,7 +22,7 @@ describe('Result<T, E> Pattern (Unit Tests)', () => {
       expect(res.error.status).toBe(400);
       expect(res.error.detail).toBe(ERROR_MESSAGES.INVALID_PAN);
       expect(res.error.toJSON()).toEqual({
-        type: 'https://api.cards.local/errors/bad-request',
+        type: 'https://api.danviviendo.com/errors/bad-request',
         title: 'Bad Request',
         status: 400,
         detail: ERROR_MESSAGES.INVALID_PAN,
@@ -33,7 +33,7 @@ describe('Result<T, E> Pattern (Unit Tests)', () => {
   it('should serialize NotFoundError to RFC 7807 JSON properly', () => {
     const notFound = new NotFoundError(ERROR_MESSAGES.CARD_NOT_FOUND, '/cards/abc');
     expect(notFound.toJSON()).toEqual({
-      type: 'https://api.cards.local/errors/not-found',
+      type: 'https://api.danviviendo.com/errors/not-found',
       title: 'Not Found',
       status: 404,
       detail: ERROR_MESSAGES.CARD_NOT_FOUND,

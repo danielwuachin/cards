@@ -1,5 +1,7 @@
 # Haulmer Cards API 💳
 
+[![CI/CD Pipeline](https://github.com/danielwuachin/cards/actions/workflows/deploy.yml/badge.svg)](https://github.com/danielwuachin/cards/actions/workflows/deploy.yml)
+
 A PCI-DSS-minded RESTful microservice for creating and looking up credit cards, built with Node.js, Express, and PostgreSQL. Infrastructure is fully automated with Terraform and GitHub Actions.
 
 ## Features
@@ -102,7 +104,7 @@ Interactive docs (OpenAPI 3.0 via Swagger UI): **[api.danviviendo.com/docs](http
 
 A ready-to-import [Postman collection](./haulmer.postman_collection.json) is also included, covering all 6 endpoints. It uses a `baseUrl` collection variable (defaults to production) — override it to `http://localhost:3000` in Postman to hit your local server instead. `Idempotency-Key` on "Create card" is set to `{{$guid}}`, so every send generates a fresh one automatically.
 
-All examples below hit the live deployment at `https://api.danviviendo.com`. Swap the host for `http://localhost:3000` to run them against your local server.
+All examples below hit the live deployment at `https://api.danviviendo.com` — a real, running instance kept up for this assessment, free to hit directly with the `curl` commands below or the Postman collection. Swap the host for `http://localhost:3000` to run them against your local server.
 
 Every response is masked (`**** **** **** 1234`) — the full PAN is never returned by any endpoint, and there is no endpoint that reveals it. Every error follows [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) (`Content-Type: application/problem+json`).
 
@@ -118,7 +120,7 @@ curl -i -X POST https://api.danviviendo.com/cards \
     "pan": "4532015112830366",
     "expirationMonth": 12,
     "expirationYear": 2030,
-    "holderName": "DANIEL SERGIO"
+    "holderName": "JANE DOE"
   }'
 ```
 
@@ -132,7 +134,7 @@ x-request-id: 636572a4-b517-4b2b-9fe6-de45b44dcce8
   "pan": "**** **** **** 0366",
   "expirationMonth": 12,
   "expirationYear": 2030,
-  "holderName": "DANIEL SERGIO",
+  "holderName": "JANE DOE",
   "createdAt": "2026-08-10T16:25:56.664Z",
   "updatedAt": "2026-08-10T16:25:56.664Z"
 }
@@ -142,7 +144,7 @@ Sending the same `Idempotency-Key` again with the same body returns this exact r
 
 ```json
 {
-  "type": "https://api.cards.local/errors/bad-request",
+  "type": "https://api.danviviendo.com/errors/bad-request",
   "title": "Bad Request",
   "status": 400,
   "detail": "Idempotency-Key header is required for this operation"
@@ -161,7 +163,7 @@ curl https://api.danviviendo.com/cards/019fec7e-bcb7-7cca-83b5-607c408f7f9f
   "pan": "**** **** **** 0366",
   "expirationMonth": 12,
   "expirationYear": 2030,
-  "holderName": "DANIEL PROD 1",
+  "holderName": "JOHN SMITH",
   "createdAt": "2026-08-10T08:34:09.494Z",
   "updatedAt": "2026-08-10T08:34:09.494Z"
 }
@@ -180,8 +182,8 @@ curl "https://api.danviviendo.com/cards?limit=2"
 ```json
 {
   "data": [
-    { "id": "019feace-fec6-7228-9eef-e83c8e7cd3ca", "pan": "**** **** **** 8327", "holderName": "RACE TEST", "expirationMonth": 9, "expirationYear": 2031, "createdAt": "2026-08-10T08:34:22.021Z", "updatedAt": "2026-08-10T08:34:22.021Z" },
-    { "id": "019feace-d303-7cca-83b5-5e4f6c3b9d0a", "pan": "**** **** **** 2832", "holderName": "DANIEL PROD 3", "expirationMonth": 3, "expirationYear": 2029, "createdAt": "2026-08-10T08:34:10.817Z", "updatedAt": "2026-08-10T08:34:10.817Z" }
+    { "id": "019feace-fec6-7228-9eef-e83c8e7cd3ca", "pan": "**** **** **** 8327", "holderName": "MARY JOHNSON", "expirationMonth": 9, "expirationYear": 2031, "createdAt": "2026-08-10T08:34:22.021Z", "updatedAt": "2026-08-10T08:34:22.021Z" },
+    { "id": "019feace-d303-7cca-83b5-5e4f6c3b9d0a", "pan": "**** **** **** 2832", "holderName": "ROBERT BROWN", "expirationMonth": 3, "expirationYear": 2029, "createdAt": "2026-08-10T08:34:10.817Z", "updatedAt": "2026-08-10T08:34:10.817Z" }
   ],
   "pagination": {
     "limit": 2,
@@ -209,7 +211,7 @@ curl "https://api.danviviendo.com/cards:search?last4=9903"
     "pan": "**** **** **** 9903",
     "expirationMonth": 6,
     "expirationYear": 2028,
-    "holderName": "DANIEL PROD 2",
+    "holderName": "EMILY DAVIS",
     "createdAt": "2026-08-10T08:34:10.202Z",
     "updatedAt": "2026-08-10T08:34:10.202Z"
   }
@@ -235,7 +237,7 @@ Enforcing this at the ALB edge means every rule is evaluated once per request, b
 A blocked request gets the same `application/problem+json` shape as every other error in this API (configured via WAF's `custom_response_body`), even though the request never reaches Express:
 ```json
 {
-  "type": "https://api.cards.local/errors/rate-limit-exceeded",
+  "type": "https://api.danviviendo.com/errors/rate-limit-exceeded",
   "title": "Too Many Requests",
   "status": 429,
   "detail": "Rate limit exceeded for last4 search. Try again shortly."

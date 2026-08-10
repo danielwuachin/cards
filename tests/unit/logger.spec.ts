@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { redactConfig } from '../../src/logger';
 
 describe('Logger PCI-DSS Redaction (Unit Test)', () => {
   it('should redact sensitive PAN fields from log output', () => {
@@ -14,10 +15,7 @@ describe('Logger PCI-DSS Redaction (Unit Test)', () => {
     const testLogger = pino(
       {
         level: 'info',
-        redact: {
-          paths: ['req.body.pan', 'req.headers.authorization', '*.pan', 'pan'],
-          censor: '[REDACTED]',
-        },
+        redact: redactConfig,
       },
       destination,
     );
@@ -41,10 +39,7 @@ describe('Logger PCI-DSS Redaction (Unit Test)', () => {
     const testLogger = pino(
       {
         level: 'info',
-        redact: {
-          paths: ['req.headers.authorization'],
-          censor: '[REDACTED]',
-        },
+        redact: redactConfig,
       },
       destination,
     );
