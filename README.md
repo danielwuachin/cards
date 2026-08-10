@@ -68,7 +68,17 @@ Edit the generated file in `/migrations` (`exports.up` / `exports.down`), then r
 
 ## ☁️ Deployment (AWS & Terraform)
 
-The infrastructure is 100% automated. You do not need to manually configure anything in the AWS Console other than having an AWS Account.
+The infrastructure is fully automated for redeploys to the *existing* AWS account and domain this was built against. Deploying into a **different** AWS account or under a **different** domain needs three manual, one-time changes first — see below.
+
+### Deploying to your own AWS account
+
+Three values in the Terraform are tied specifically to this project's AWS account and domain, not placeholders:
+
+1. **ACM certificate ARN** (`terraform/alb.tf`, `aws_lb_listener.https`) — request your own certificate in AWS Certificate Manager for your domain, validate it (AWS gives you a CNAME to add at your DNS provider), then swap in your certificate's ARN.
+2. **S3 backend bucket** (`terraform/provider.tf`) — this holds Terraform's state; it's specific to this AWS account. Create your own bucket and replace the `bucket` value.
+3. **DNS record** — point your domain's `api` subdomain (CNAME) at the ALB's DNS name, available as a Terraform output (`alb_dns_name`) after the first `apply`. This is a one-time manual step regardless of DNS provider, since Terraform can't reach into a third-party DNS provider without a matching provider plugin and API credentials for it.
+
+If the ALB is ever destroyed and recreated, AWS assigns it a **new** DNS name — the CNAME above needs updating to match, since nothing currently keeps it in sync automatically.
 
 ### GitHub Actions (CI/CD)
 To enable automatic deployments on `push` to the `main` branch, configure the following secrets in your GitHub Repository (`Settings` > `Secrets and variables` > `Actions`):
