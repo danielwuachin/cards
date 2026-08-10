@@ -13,13 +13,28 @@ describe('Express API Endpoints & E2E (Supertest)', () => {
   });
 
   describe('POST /cards (Validations & Errors)', () => {
-    it('should return 400 Bad Request in RFC 7807 format when PAN fails Luhn check', async () => {
+    it('should return 400 Bad Request when Idempotency-Key header is missing', async () => {
       const response = await request(app).post('/cards').send({
-        pan: '4532015112830367', // Luhn inválido
+        pan: '4532015112830366',
         expirationMonth: 12,
         expirationYear: 2030,
         holderName: 'DANIEL L3',
       });
+
+      expect(response.status).toBe(400);
+      expect(response.body.detail).toBe('Idempotency-Key header is required for this operation');
+    });
+
+    it('should return 400 Bad Request in RFC 7807 format when PAN fails Luhn check', async () => {
+      const response = await request(app)
+        .post('/cards')
+        .set('Idempotency-Key', 'e2e-luhn-check')
+        .send({
+          pan: '4532015112830367', // Luhn inválido
+          expirationMonth: 12,
+          expirationYear: 2030,
+          holderName: 'DANIEL L3',
+        });
 
       expect(response.status).toBe(400);
       expect(response.type).toContain('application/problem+json');
@@ -32,12 +47,15 @@ describe('Express API Endpoints & E2E (Supertest)', () => {
     });
 
     it('should return 400 Bad Request when expiration date is in the past', async () => {
-      const response = await request(app).post('/cards').send({
-        pan: '4532015112830366',
-        expirationMonth: 1,
-        expirationYear: 2020,
-        holderName: 'DANIEL L3',
-      });
+      const response = await request(app)
+        .post('/cards')
+        .set('Idempotency-Key', 'e2e-expired-check')
+        .send({
+          pan: '4532015112830366',
+          expirationMonth: 1,
+          expirationYear: 2020,
+          holderName: 'DANIEL L3',
+        });
 
       expect(response.status).toBe(400);
       expect(response.body.title).toBe('Bad Request');

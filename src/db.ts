@@ -33,7 +33,7 @@ pool.on('error', (err) => {
 
 /**
  * Runs defensive schema migrations to ensure required tables, primary keys, and columns exist.
- * Drops legacy NOT NULL constraints on old table columns if present.
+ * Uses IF NOT EXISTS everywhere so it's safe to run on every boot across multiple ECS tasks.
  */
 export async function runMigrations(): Promise<void> {
   const sql = `
@@ -59,17 +59,6 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE cards ADD COLUMN IF NOT EXISTS holder_name VARCHAR(100);
     ALTER TABLE cards ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     ALTER TABLE cards ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-
-    -- Drop legacy NOT NULL constraints if existing table was created by old migrations
-    DO $$
-    BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cards' AND column_name = 'pan_ciphertext') THEN
-            ALTER TABLE cards ALTER COLUMN pan_ciphertext DROP NOT NULL;
-        END IF;
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cards' AND column_name = 'pan_hash') THEN
-            ALTER TABLE cards ALTER COLUMN pan_hash DROP NOT NULL;
-        END IF;
-    END $$;
 
     CREATE TABLE IF NOT EXISTS idempotency_keys (
         key VARCHAR(255) NOT NULL,
