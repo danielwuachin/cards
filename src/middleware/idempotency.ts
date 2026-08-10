@@ -92,10 +92,10 @@ export function createIdempotencyMiddleware(dbQuery = defaultQuery) {
             SET status = 'completed', status_code = $1, response_body = $2
             WHERE key = $3
           `;
-          dbQuery(updateSql, [statusCode, JSON.stringify(body), key]).catch(() => { });
+          dbQuery(updateSql, [statusCode, JSON.stringify(body), key]).catch(() => {});
         } else {
           const deleteSql = `DELETE FROM idempotency_keys WHERE key = $1`;
-          dbQuery(deleteSql, [key]).catch(() => { });
+          dbQuery(deleteSql, [key]).catch(() => {});
         }
 
         return originalJson(body);
