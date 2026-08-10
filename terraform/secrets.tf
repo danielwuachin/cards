@@ -11,13 +11,14 @@ resource "random_bytes" "encryption_key" {
 }
 
 resource "aws_secretsmanager_secret" "app_secrets" {
-  name = "${var.project_name}-${var.environment}-secrets"
+  name                    = "${var.project_name}-${var.environment}-secrets"
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "app_secrets_version" {
   secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
     DATABASE_URL        = "postgres://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.endpoint}/cardsdb"
-    CARD_ENCRYPTION_KEY = random_bytes.encryption_key.base64
+    CARD_ENCRYPTION_KEY = random_bytes.encryption_key.hex
   })
 }

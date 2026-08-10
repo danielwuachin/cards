@@ -93,6 +93,11 @@ resource "aws_ecs_service" "app" {
     assign_public_ip = false
   }
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   load_balancer {
     target_group_arn = aws_lb_target_group.app.arn
     container_name   = "${var.project_name}-container"
