@@ -1,0 +1,132 @@
+{
+  "info": {
+    "_postman_id": "766a1b54-0002-4730-8d4f-be58177f34a6",
+    "name": "haulmer",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "16349428"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.danviviendo.com",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create card",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pan\": \"4539148803436467\",\n  \"expirationMonth\": 9,\n  \"expirationYear\": 2028,\n  \"holderName\": \"Jane Doe\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cards",
+          "host": ["{{baseUrl}}"],
+          "path": ["cards"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List cards",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cards?limit=100",
+          "host": ["{{baseUrl}}"],
+          "path": ["cards"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "100"
+            },
+            {
+              "key": "cursor",
+              "value": "eyJpZCI6IjAxOWZlY2QxLWU5ZDMtN2NjYS04M2I1LTZlZTZjYzIyY2VmMSJ9",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search by last 4 digits",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cards:search?last4=0365",
+          "host": ["{{baseUrl}}"],
+          "path": ["cards:search"],
+          "query": [
+            {
+              "key": "last4",
+              "value": "0365"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get card by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cards/019fec7e-bcb7-7cca-83b5-607c408f7f9f",
+          "host": ["{{baseUrl}}"],
+          "path": ["cards", "019fec7e-bcb7-7cca-83b5-607c408f7f9f"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health (liveness)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health (readiness)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health/ready",
+          "host": ["{{baseUrl}}"],
+          "path": ["health", "ready"]
+        }
+      },
+      "response": []
+    }
+  ]
+}

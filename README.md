@@ -37,7 +37,7 @@ The application is designed to run on **AWS ECS Fargate** behind an **Applicatio
 Clone the repository and install dependencies:
 ```bash
 git clone <repository-url>
-cd haulmer-cards-express
+cd cards
 pnpm install
 ```
 
@@ -89,6 +89,8 @@ To enable automatic deployments on `push` to the `main` branch, configure the fo
 ## 📖 API Documentation
 
 Interactive docs (OpenAPI 3.0 via Swagger UI): **[api.danviviendo.com/docs](https://api.danviviendo.com/docs)**. It reads `openapi.yaml` from the repo at boot, so it's always in sync with whatever's actually deployed — no separate publish step. Click "Try it out" on any endpoint to fire real requests against the live API, e.g. for a frontend team integrating against it. To update it: edit `openapi.yaml`, commit, the next deploy picks it up.
+
+A ready-to-import [Postman collection](./haulmer.postman_collection.json) is also included, covering all 6 endpoints. It uses a `baseUrl` collection variable (defaults to production) — override it to `http://localhost:3000` in Postman to hit your local server instead. `Idempotency-Key` on "Create card" is set to `{{$guid}}`, so every send generates a fresh one automatically.
 
 All examples below hit the live deployment at `https://api.danviviendo.com`. Swap the host for `http://localhost:3000` to run them against your local server.
 
@@ -245,4 +247,3 @@ curl https://api.danviviendo.com/health/ready
 Hitting `/health` repeatedly and grouping by `instanceId` is the load-balancing evidence this assessment asks for — different `instanceId` values across consecutive requests means the ALB is actually spreading traffic across both replicas, not pinning you to one.
 
 ---
-*Built as a Senior Backend Engineering Technical Assessment.*
