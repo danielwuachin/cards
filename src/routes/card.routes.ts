@@ -13,7 +13,6 @@ export const cardRouter = Router();
 cardRouter.post('/cards', idempotencyMiddleware, createCardHandler);
 
 // GET /cards:search?last4= and /cards/search?last4= -> Search by last 4 digits
-// Rate limiting lives at the edge now (AWS WAF on the ALB), not here — see DECISIONS.md.
 cardRouter.get('/cards\\:search', searchByLast4Handler);
 cardRouter.get('/cards/search', searchByLast4Handler);
 

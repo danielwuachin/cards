@@ -206,11 +206,19 @@ curl "https://api.danviviendo.com/cards:search?last4=9903"
 
 `GET /cards/search?last4=` (regular slash instead of the colon) works identically — added because `/cards:search` is an unusual path shape for some HTTP clients and proxies.
 
-### 5. Rate limiting on search
+### 5. Rate limiting — tiered by risk, at the ALB edge
 
-`GET /cards:search` (and `/cards/search`) is limited to ~30 requests/minute per IP (150 per 5-minute window — WAF's rate window is fixed at 5 minutes) via an **AWS WAF rate-based rule** on the ALB (`terraform/waf.tf`), scoped to just those two paths — the rest of the API is unaffected. `last4` only has 10,000 possible values, so unrestricted search is a card-enumeration side channel; the other endpoints don't have that specific risk.
+Three separate **AWS WAF rate-based rules** on the ALB (`terraform/waf.tf`), not one blanket number — different routes carry different risk:
 
-This used to be an in-app `express-rate-limit` middleware, but its counter was in-memory per process — with 2 ECS replicas, each task counted independently, so the *effective* ceiling was closer to 60/min than the configured 30/min, and it would only get less accurate with more replicas. Moving enforcement to WAF fixes that: it's evaluated once per request at the edge, before anything reaches an ECS task, so it's correct regardless of how many replicas are running. See `DECISIONS.md` §7 for the full comparison against the alternatives (Redis, ALB stickiness) and why WAF won.
+| Rule | Routes | Limit |
+|---|---|---|
+| `rate-limit-search` | `GET /cards:search`, `GET /cards/search` | 150 req / 5 min per IP (≈30/min) — enumeration risk, `last4` is only 10,000 values |
+| `rate-limit-cards-write` | `POST /cards` | 150 / 5 min — free to generate Luhn-valid PANs, so unrestricted writes cost real money/DB load |
+| `rate-limit-cards-read` | `GET /cards` (list), `GET /cards/{id}` | 300 / 5 min — double the others, since pagination and detail views are routine frontend traffic, not abuse |
+
+`/health*` and `/docs` match none of these rules and stay completely unlimited — the ALB's own health check must never be throttled.
+
+Enforcing this at the ALB edge means every rule is evaluated once per request, before anything reaches an ECS task — correct regardless of how many replicas are running, with zero rate-limiting logic inside the app itself. See `DECISIONS.md` §7 for the comparison against the alternatives (Redis, ALB stickiness) and why WAF won.
 
 A blocked request gets the same `application/problem+json` shape as every other error in this API (configured via WAF's `custom_response_body`), even though the request never reaches Express:
 ```json

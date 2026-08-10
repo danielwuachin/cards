@@ -39,10 +39,7 @@ export function createIdempotencyMiddleware(dbQuery = defaultQuery) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const key = req.headers['idempotency-key'];
 
-    // Idempotency-Key is required, not optional: it's the only mechanism that
-    // prevents duplicate card records on network retries, since PAN has no
-    // uniqueness constraint (see anti-enumeration ADR). Skipping it would
-    // silently disable that protection.
+    // Idempotency-Key is required to prevent duplicate records on retries.
     if (!key || typeof key !== 'string' || !key.trim()) {
       return next(new BadRequestError(ERROR_MESSAGES.IDEMPOTENCY_KEY_REQUIRED));
     }
@@ -88,21 +85,17 @@ export function createIdempotencyMiddleware(dbQuery = defaultQuery) {
       res.json = function (body: unknown): Response {
         const statusCode = res.statusCode;
 
-        // Only a successful (2xx) response is a final, replayable result.
-        // 4xx means the client sent bad input — let them fix it and retry
-        // the same key. 5xx means WE failed — that's transient by definition,
-        // so it must not be cached either, or a retry after a passing outage
-        // would keep replaying the old 500 forever instead of trying again.
+        // Only successful (2xx) responses are cached for replay.
         if (statusCode >= 200 && statusCode < 300) {
           const updateSql = `
             UPDATE idempotency_keys
             SET status = 'completed', status_code = $1, response_body = $2
             WHERE key = $3
           `;
-          dbQuery(updateSql, [statusCode, JSON.stringify(body), key]).catch(() => {});
+          dbQuery(updateSql, [statusCode, JSON.stringify(body), key]).catch(() => { });
         } else {
           const deleteSql = `DELETE FROM idempotency_keys WHERE key = $1`;
-          dbQuery(deleteSql, [key]).catch(() => {});
+          dbQuery(deleteSql, [key]).catch(() => { });
         }
 
         return originalJson(body);
