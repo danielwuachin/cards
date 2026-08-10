@@ -11,7 +11,8 @@ export function errorHandlerMiddleware(
   res: Response,
   _next: NextFunction,
 ): void {
-  const appError = err instanceof AppError ? err : new InternalServerError(ERROR_MESSAGES.INTERNAL_ERROR);
+  const appError =
+    err instanceof AppError ? err : new InternalServerError(ERROR_MESSAGES.INTERNAL_ERROR);
 
   logger.error(
     {

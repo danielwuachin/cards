@@ -5,8 +5,7 @@ import { AppError } from './errors';
  * Eliminates unhandled runtime throw exceptions across business logic.
  */
 export type Result<T, E extends AppError = AppError> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: E };
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
 
 export function ok<T>(value: T): Result<T, never> {
   return { ok: true, value };

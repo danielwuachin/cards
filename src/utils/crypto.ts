@@ -44,6 +44,15 @@ export function encryptPan(
 
 /**
  * Decrypts an AES-256-GCM ciphertext while verifying the authTag and AAD (cardId) integrity.
+ *
+ * There is intentionally no HTTP route that calls this function — decrypting the
+ * full PAN on demand would violate PCI-DSS 3.3 (mask PAN on display) for zero
+ * business benefit, since every read path only needs the `last4` column.
+ * Round-trip correctness (encrypt -> decrypt -> original value) and tamper
+ * detection (wrong AAD / modified ciphertext must fail, not silently corrupt)
+ * are proven in isolation instead:
+ *
+ *   pnpm exec jest tests/unit/crypto.spec.ts
  */
 export function decryptPan(
   encryptedPan: string,

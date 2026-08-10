@@ -1,12 +1,9 @@
 import {
   createCardService,
   getCardByIdService,
-  revealCardPanService,
   listCardsService,
   searchByLast4Service,
 } from '../../src/services/card.service';
-import { encryptPan } from '../../src/utils/crypto';
-import { config } from '../../src/config';
 
 describe('CardService Pure Functions (Unit Tests)', () => {
   const mockDbQuery = jest.fn();
@@ -65,42 +62,6 @@ describe('CardService Pure Functions (Unit Tests)', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.status).toBe(400);
-      }
-    });
-  });
-
-  describe('revealCardPanService', () => {
-    it('should decrypt and reveal cleartext PAN', async () => {
-      const cardId = '018f6f52-4752-7889-a9a3-5c8c50e7b89a';
-      const rawPan = '4532015112830366';
-      const encRes = encryptPan(rawPan, cardId, config.security.cardEncryptionKey);
-
-      expect(encRes.ok).toBe(true);
-      if (!encRes.ok) return;
-
-      mockDbQuery.mockResolvedValueOnce({
-        rows: [
-          {
-            id: cardId,
-            encrypted_pan: encRes.value.encryptedPan,
-            iv: encRes.value.iv,
-            auth_tag: encRes.value.authTag,
-            last4: '0366',
-            expiration_month: 12,
-            expiration_year: 2030,
-            holder_name: 'John Doe',
-            created_at: new Date(),
-            updated_at: new Date(),
-          },
-        ],
-      });
-
-      const revealRes = await revealCardPanService(cardId, mockDbQuery);
-
-      expect(revealRes.ok).toBe(true);
-      if (revealRes.ok) {
-        expect(revealRes.value.pan).toBe(rawPan);
-        expect(revealRes.value.holderName).toBe('John Doe');
       }
     });
   });

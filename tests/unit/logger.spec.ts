@@ -3,7 +3,7 @@ import pino from 'pino';
 describe('Logger PCI-DSS Redaction (Unit Test)', () => {
   it('should redact sensitive PAN fields from log output', () => {
     let loggedData = '';
-    
+
     // Stream de captura para inspeccionar la salida JSON de Pino
     const destination = {
       write: (msg: string): void => {

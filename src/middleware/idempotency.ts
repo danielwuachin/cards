@@ -18,7 +18,10 @@ export interface IdempotencyRow {
  */
 function hashPayload(payload: unknown): string {
   if (!payload || typeof payload !== 'object') {
-    return crypto.createHash('sha256').update(String(payload || '')).digest('hex');
+    return crypto
+      .createHash('sha256')
+      .update(String(payload || ''))
+      .digest('hex');
   }
 
   const keys = Object.keys(payload as object).sort();
@@ -36,6 +39,9 @@ export function createIdempotencyMiddleware(dbQuery = defaultQuery) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const key = req.headers['idempotency-key'];
 
+    // Idempotency-Key is optional (Stripe-style): callers that care about
+    // safe retries send it; requests without it skip dedup and are created
+    // directly, so plain validation-only requests never depend on this header.
     if (!key || typeof key !== 'string' || !key.trim()) {
       return next();
     }

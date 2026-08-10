@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import {
   createCardService,
   getCardByIdService,
-  revealCardPanService,
   listCardsService,
   searchByLast4Service,
 } from '../services/card.service';
@@ -38,27 +37,6 @@ export async function getCardByIdHandler(
 ): Promise<void> {
   try {
     const result = await getCardByIdService(req.params.id);
-
-    if (result.ok === false) {
-      return next(result.error);
-    }
-
-    res.status(200).json(result.value);
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * Handles GET /cards/:id/reveal request.
- */
-export async function revealCardPanHandler(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const result = await revealCardPanService(req.params.id);
 
     if (result.ok === false) {
       return next(result.error);

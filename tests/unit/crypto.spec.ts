@@ -58,6 +58,48 @@ describe('AES-256-GCM Encryption with AAD & Masking (Unit Tests)', () => {
     }
   });
 
+  it('should fail decryption if the ciphertext is tampered with (authTag integrity check)', () => {
+    const encResult = encryptPan(pan, cardId, testKey);
+    expect(isOk(encResult)).toBe(true);
+
+    if (isOk(encResult)) {
+      // Flip one hex character in the ciphertext to simulate a compromised
+      // row (e.g. attacker with raw DB write access). AES-GCM must reject
+      // this at the authTag check instead of returning corrupted plaintext.
+      const tampered =
+        encResult.value.encryptedPan.slice(0, -1) +
+        (encResult.value.encryptedPan.slice(-1) === '0' ? '1' : '0');
+
+      const decResult = decryptPan(
+        tampered,
+        encResult.value.iv,
+        encResult.value.authTag,
+        cardId,
+        testKey,
+      );
+
+      expect(isErr(decResult)).toBe(true);
+    }
+  });
+
+  it('should fail decryption with a wrong encryption key (key rotation / mismatch safety)', () => {
+    const encResult = encryptPan(pan, cardId, testKey);
+    expect(isOk(encResult)).toBe(true);
+
+    if (isOk(encResult)) {
+      const wrongKey = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+      const decResult = decryptPan(
+        encResult.value.encryptedPan,
+        encResult.value.iv,
+        encResult.value.authTag,
+        cardId,
+        wrongKey,
+      );
+
+      expect(isErr(decResult)).toBe(true);
+    }
+  });
+
   it('should mask PAN correctly as **** **** **** 0366', () => {
     expect(maskPan(pan)).toBe('**** **** **** 0366');
     expect(maskPan('0366')).toBe('**** **** **** 0366');

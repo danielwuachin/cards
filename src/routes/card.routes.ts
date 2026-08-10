@@ -2,7 +2,6 @@ import { Router } from 'express';
 import {
   createCardHandler,
   getCardByIdHandler,
-  revealCardPanHandler,
   listCardsHandler,
   searchByLast4Handler,
 } from '../controllers/card.controller';
@@ -17,9 +16,6 @@ cardRouter.post('/cards', idempotencyMiddleware, createCardHandler);
 // GET /cards:search?last4= and /cards/search?last4= -> Search by last 4 digits (with rate limiter)
 cardRouter.get('/cards\\:search', searchRateLimiter, searchByLast4Handler);
 cardRouter.get('/cards/search', searchRateLimiter, searchByLast4Handler);
-
-// GET /cards/:id/reveal -> Decrypts and reveals cleartext PAN for verification
-cardRouter.get('/cards/:id/reveal', revealCardPanHandler);
 
 // GET /cards?limit=&cursor= -> Lists cards with UUIDv7 opaque Base64 cursor pagination
 cardRouter.get('/cards', listCardsHandler);

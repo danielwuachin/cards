@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Result, ok, err } from '../shared/result';
 import { BadRequestError, NotFoundError, AppError, ERROR_MESSAGES } from '../shared/errors';
 import { validateLuhn, validateExpiration } from '../utils/luhn';
-import { encryptPan, decryptPan, maskPan } from '../utils/crypto';
+import { encryptPan, maskPan } from '../utils/crypto';
 import { encodeCursor, decodeCursor } from '../utils/cursor';
 import { query as defaultQuery } from '../db';
 import { config } from '../config';
@@ -192,45 +192,6 @@ export async function getCardByIdService(
 }
 
 /**
- * Reveals cleartext PAN by executing AES-256-GCM decryption for authorized verification.
- */
-export async function revealCardPanService(
-  id: string,
-  dbQuery = defaultQuery,
-): Promise<Result<{ id: string; pan: string; holderName: string }, AppError>> {
-  if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
-    return err(new BadRequestError('Invalid UUID format'));
-  }
-
-  const sql = `SELECT * FROM cards WHERE id = $1`;
-  const dbResult = await dbQuery<CardRow>(sql, [id]);
-
-  if (dbResult.rows.length === 0) {
-    return err(new NotFoundError(ERROR_MESSAGES.CARD_NOT_FOUND));
-  }
-
-  const row = dbResult.rows[0];
-
-  const decryptRes = decryptPan(
-    row.encrypted_pan,
-    row.iv,
-    row.auth_tag,
-    row.id,
-    config.security.cardEncryptionKey,
-  );
-
-  if (decryptRes.ok === false) {
-    return err(decryptRes.error);
-  }
-
-  return ok({
-    id: row.id,
-    pan: decryptRes.value,
-    holderName: row.holder_name,
-  });
-}
-
-/**
  * Lists card records using opaque Base64 cursor pagination over UUIDv7.
  */
 export async function listCardsService(
@@ -276,9 +237,7 @@ export async function listCardsService(
   const data = pageRows.map(mapRowToResponse);
 
   const nextCursor =
-    hasMore && pageRows.length > 0
-      ? encodeCursor({ id: pageRows[pageRows.length - 1].id })
-      : null;
+    hasMore && pageRows.length > 0 ? encodeCursor({ id: pageRows[pageRows.length - 1].id }) : null;
 
   const prevCursor = cursor ? cursor : null;
 
