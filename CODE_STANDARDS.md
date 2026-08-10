@@ -4,10 +4,10 @@ Este documento define las reglas de codificación, herramientas y estándares de
 
 ---
 
-## 1. Herramientas & Entorno de Desarrollo (PNPM + Husky)
+## 1. Herramientas & Entorno de Desarrollo (PNPM)
 
 - **Gestor de Paquetes**: `pnpm` obligatorio (cero `npm` o `yarn`).
-- **Husky & Lint-Staged**: Configurado en `.husky/pre-commit` para ejecutar ESLint, Prettier y TypeScript check antes de registrar cualquier commit.
+- **Sin git hooks**: se probó Husky + lint-staged al inicio del proyecto y se retiró — corre `pnpm lint` y `pnpm test` a mano antes de commitear, o confía en que el job de CI los corre en cada push.
 - **Commitlint (Conventional Commits)**: Todo mensaje de commit debe seguir el formato estándar:
   - `feat: <descripción>` — Nueva funcionalidad
   - `fix: <descripción>` — Corrección de error

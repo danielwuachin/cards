@@ -52,21 +52,25 @@ resource "aws_lb_target_group" "app" {
   }
 }
 
-# NOTE: The instructions asked for ALB (HTTPS). 
-# Creating an HTTPS listener requires a verified domain and an ACM Certificate.
-# By default, we will expose HTTP for testing purposes.
+# Port 80 exists only to bounce browsers/clients onto HTTPS — it never
+# forwards to the app. A plain 301 redirect, same host/path, just the
+# protocol and port swapped.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
-# Example of how the HTTPS listener would look:
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"

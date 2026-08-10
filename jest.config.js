@@ -19,5 +19,6 @@ module.exports = {
     '^@config/(.*)$': '<rootDir>/src/config/$1',
   },
   testMatch: ['**/tests/**/*.(spec|e2e-spec).ts'],
+  globalSetup: '<rootDir>/tests/global-setup.js',
   verbose: true,
 };

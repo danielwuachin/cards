@@ -31,9 +31,8 @@ export function createApp(): Express {
     }),
   );
 
-  // 5. Routes (v1 prefix and root fallback)
-  app.use('/v1', healthRouter);
-  app.use('/v1', cardRouter);
+  // 5. Routes — bare paths only, matching the assessment spec exactly.
+  // No /v1 prefix: there's no v2 to version against yet (YAGNI).
   app.use('/', healthRouter);
   app.use('/', cardRouter);
 

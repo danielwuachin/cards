@@ -1,3 +1,4 @@
+import path from 'path';
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { config } from './config';
 import { logger } from './logger';
@@ -32,68 +33,53 @@ pool.on('error', (err) => {
 });
 
 /**
- * Runs defensive schema migrations to ensure required tables, primary keys, and columns exist.
- * Uses IF NOT EXISTS everywhere so it's safe to run on every boot across multiple ECS tasks.
+ * Same connection resolution logic as the Pool above, but as a URL string —
+ * node-pg-migrate's runner takes a connection string, not a config object.
+ */
+function buildDatabaseUrl(): string {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+  const { host, port, name, user, password } = config.db;
+  return `postgres://${user}:${password}@${host}:${port}/${name}`;
+}
+
+/**
+ * Runs pending migrations from /migrations via node-pg-migrate. Safe to call
+ * from every ECS task on every boot: node-pg-migrate takes a Postgres
+ * advisory lock for the duration of the run, so if two tasks start at once,
+ * the second just waits for the first to finish instead of racing it.
+ *
+ * Deliberately does NOT swallow a failed migration — an unknown schema state
+ * is worse than a task that fails to become healthy. Exiting lets the ECS
+ * deployment circuit breaker roll back to the last good revision instead of
+ * serving traffic against a broken database.
  */
 export async function runMigrations(): Promise<void> {
-  const sql = `
-    CREATE TABLE IF NOT EXISTS cards (
-        id UUID PRIMARY KEY,
-        encrypted_pan TEXT NOT NULL,
-        iv VARCHAR(32) NOT NULL,
-        auth_tag VARCHAR(32) NOT NULL,
-        last4 VARCHAR(4) NOT NULL,
-        expiration_month INT NOT NULL,
-        expiration_year INT NOT NULL,
-        holder_name VARCHAR(100) NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS encrypted_pan TEXT;
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS iv VARCHAR(32);
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS auth_tag VARCHAR(32);
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS last4 VARCHAR(4);
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS expiration_month INT;
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS expiration_year INT;
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS holder_name VARCHAR(100);
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-    ALTER TABLE cards ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-
-    CREATE TABLE IF NOT EXISTS idempotency_keys (
-        key VARCHAR(255) NOT NULL,
-        request_hash VARCHAR(64) NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
-        status_code INT,
-        response_body JSONB,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
-    );
-
-    DO $$
-    BEGIN
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint WHERE conname = 'idempotency_keys_pkey'
-        ) THEN
-            ALTER TABLE idempotency_keys ADD CONSTRAINT idempotency_keys_pkey PRIMARY KEY (key);
-        END IF;
-    END $$;
-
-    ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'in_progress';
-    ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS status_code INT;
-    ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS response_body JSONB;
-    ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours');
-
-    CREATE INDEX IF NOT EXISTS idx_cards_last4 ON cards(last4);
-    CREATE INDEX IF NOT EXISTS idx_cards_created_at ON cards(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_idempotency_created_at ON idempotency_keys(created_at);
-    CREATE INDEX IF NOT EXISTS idx_idempotency_expires_at ON idempotency_keys(expires_at);
-  `;
   try {
-    await pool.query(sql);
-    logger.info('Database migrations verified successfully');
+    const { runner } = await import('node-pg-migrate');
+    const applied = await runner({
+      databaseUrl: buildDatabaseUrl(),
+      dir: path.resolve(__dirname, '../migrations'),
+      direction: 'up',
+      migrationsTable: 'pgmigrations',
+      advisoryLockMode: 'wait',
+      logger: {
+        info: (msg: string) => logger.info(msg),
+        warn: (msg: string) => logger.warn(msg),
+        error: (msg: string) => logger.error(msg),
+      },
+    });
+    logger.info(
+      { applied: applied.map((m) => m.name) },
+      'Database migrations applied successfully',
+    );
   } catch (err) {
-    logger.error({ err }, 'Error executing database migrations');
+    logger.fatal(
+      { err },
+      'Database migration failed. Refusing to start with an unverified schema.',
+    );
+    process.exit(1);
   }
 }
 

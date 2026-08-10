@@ -1,7 +1,17 @@
 import request from 'supertest';
 import { app } from '../../src/app';
+import { pool } from '../../src/db';
 
 describe('Express API Endpoints & E2E (Supertest)', () => {
+  // Every test hits the real database. Truncate after each one so a row left
+  // behind by one test (or a test added later that actually creates a card)
+  // can never leak into the next test's assertions.
+  afterEach(async () => {
+    await pool.query('TRUNCATE TABLE cards, idempotency_keys');
+  });
+
+  afterAll(() => pool.end());
+
   describe('GET /health (Liveness)', () => {
     it('should return 200 OK with status and instanceId', async () => {
       const response = await request(app).get('/health');
