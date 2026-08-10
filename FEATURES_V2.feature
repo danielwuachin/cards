@@ -2,7 +2,7 @@ Feature: Credit Card Management Service (Express V2 - KISS & PCI-DSS)
 
   As an API Consumer
   I want to create, retrieve, search, and list credit cards securely
-  So that PCI-DSS compliance, idempotency, and high availability are guaranteed.
+  So that PCI-DSS compliance, idempotency, rate limiting, and high availability are guaranteed.
 
   # ---------------------------------------------------------------------------
   # POST /cards - Create Card
@@ -34,7 +34,7 @@ Feature: Credit Card Management Service (Express V2 - KISS & PCI-DSS)
     And the response should follow RFC 7807 problem details format:
       """
       {
-        "type": "https://api.cards.local/errors/invalid-pan",
+        "type": "https://api.cards.local/errors/bad-request",
         "title": "Bad Request",
         "status": 400,
         "detail": "The provided PAN failed the Luhn checksum validation algorithm"
@@ -59,6 +59,13 @@ Feature: Credit Card Management Service (Express V2 - KISS & PCI-DSS)
     Then both HTTP responses must return identical status code 201
     And both HTTP responses must return identical JSON body
     And only 1 single record must be inserted into the database
+
+  @T15
+  Scenario: Reusing same Idempotency-Key with different payload returns 422 Unprocessable Entity
+    Given a request header "Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+    And a POST "/cards" has completed previously with body A
+    When a new POST "/cards" is sent with same Idempotency-Key but different body B
+    Then the response status should be 422 Unprocessable Entity
 
   # ---------------------------------------------------------------------------
   # GET /cards/{id} - Get Card By ID
@@ -108,7 +115,7 @@ Feature: Credit Card Management Service (Express V2 - KISS & PCI-DSS)
     And the cards should be ordered ASC by UUIDv7 timestamp
 
   # ---------------------------------------------------------------------------
-  # GET /cards:search?last4= - Search By Last 4 Digits
+  # GET /cards:search?last4= - Search By Last 4 Digits & Rate Limiting
   # ---------------------------------------------------------------------------
 
   @T11 @T14
@@ -126,12 +133,19 @@ Feature: Credit Card Management Service (Express V2 - KISS & PCI-DSS)
     And the RFC 7807 detail should state "last4 query parameter must be exactly 4 numeric digits"
 
   # ---------------------------------------------------------------------------
-  # GET /health - Healthcheck & Load Balancer Instance ID
+  # GET /health & GET /health/ready - Healthcheck & AWS ALB Instance ID
   # ---------------------------------------------------------------------------
 
   @T13
-  Scenario: Healthcheck endpoint returns status OK and AWS/Container instance identifier
+  Scenario: Liveness healthcheck returns status OK and instance identifier for AWS ALB
     When a GET request is made to "/health"
     Then the response status should be 200 OK
     And the response JSON should contain "status": "OK"
     And the response JSON should contain an "instanceId" string
+
+  @T13
+  Scenario: Readiness healthcheck verifies database connection
+    When a GET request is made to "/health/ready"
+    Then the response status should be 200 OK
+    And the response JSON should contain "status": "OK"
+    And the response JSON should contain "database": "connected"

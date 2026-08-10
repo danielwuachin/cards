@@ -1,75 +1,75 @@
 # DECISIONS V2 — Decisiones de Arquitectura, Ciberseguridad & PCI-DSS
 
-Este documento contiene las reglas de diseño, patrones de arquitectura, guías de ciberseguridad PCI-DSS y decisiones operativas para la construcción del servicio de tarjetas de crédito en Express.js.
+Este documento contiene las reglas de diseño, patrones de arquitectura, guías de ciberseguridad PCI-DSS y decisiones operativas refinadas para la construcción del servicio de tarjetas de crédito en Express.js.
 
 ---
 
 ## 1. Guía de Ciberseguridad & PCI-DSS (Reglas de Obligatorio Cumplimiento)
 
-### A. Almacenamiento Cifrado de Datos Sensibles (PAN)
-- **Algoritmo de cifrado**: `AES-256-GCM` (Galois/Counter Mode), el estándar recomendado por PCI-DSS v4.0 por proveer confidencialidad e integridad autenticada.
-- **Vector de Inicialización (IV)**: Cada tarjeta cifrada debe generar un `IV` criptográficamente seguro de 12 bytes (`crypto.randomBytes(12)`). **Está estrictamente prohibido reutilizar IVs.**
-- **Auth Tag**: Cada cifrado debe almacenar la etiqueta de autenticación de 16 bytes (`authTag`) retornada por AES-GCM para verificar que el texto cifrado no ha sido alterado.
-- **Clave de cifrado (`CARD_ENCRYPTION_KEY`)**: Clave de 32 bytes (256 bits) cargada exclusivamente mediante variables de entorno desde AWS Secrets Manager / `.env`.
+### A. Almacenamiento Cifrado de Datos Sensibles (PAN) con AAD
+- **Algoritmo de cifrado**: `AES-256-GCM` (Galois/Counter Mode), el estándar recomendado por PCI-DSS v4.0.
+- **Vector de Inicialización (IV)**: Cada tarjeta cifrada genera un `IV` aleatorio de 12 bytes (`crypto.randomBytes(12)`). **Prohibido reutilizar IVs.**
+- **Auth Tag**: Etiqueta de autenticación de 16 bytes (`authTag`) para integridad.
+- **AAD (Additional Authenticated Data)**: Se pasa el `card.id` (UUIDv7) como AAD (`cipher.setAAD(Buffer.from(cardId))`). Esto impide que un atacante mueva o transponga ciphertexts entre filas de la base de datos.
+- **Fail-Fast al arranque**: La aplicación valida al iniciar que `CARD_ENCRYPTION_KEY` contenga exactamente 64 caracteres hexadecimales (32 bytes). Si es inválida, se detiene el proceso inmediatamente (`process.exit(1)`).
 
-### B. Prohibición de Registro y Fuga de PAN (Zero-Log Policy)
-- El PAN completo en texto plano **NUNCA debe ser registrado en logs**, serializado en excepciones ni guardado en texto claro en disco o base de datos.
-- **Redacción en Pino Logger**: El logger Pino debe contar con reglas activas de mascaramiento (*redactors*) para las propiedades `pan`, `cardNumber`, `creditCard`, `authorization` y headers sensibles.
-- **Respuesta de la API**: Toda respuesta de la API que retorne información de tarjeta debe devolver únicamente el PAN enmascarado (`**** **** **** 1234`). El PAN en claro solo ingresa en el body del `POST /cards` y se cifra inmediatamente en memoria.
+### B. Prohibición de Registro y Fuga de PAN (Zero-Log Policy & Request ID)
+- El PAN completo en texto plano **NUNCA debe ser registrado en logs**, serializado en excepciones ni guardado en texto claro.
+- **Redacción en Pino Logger**: Pino cuenta con reglas de mascaramiento (*redactors*) para las propiedades `pan`, `cardNumber`, `creditCard`, `authorization` y headers sensibles.
+- **Trazabilidad mediante Request ID (`x-request-id`)**: Cada petición HTTP genera o propaga un header `x-request-id` (UUIDv4) que Pino adjunta automáticamente a todos los logs de esa solicitud para rastreabilidad en AWS CloudWatch con múltiples réplicas.
 
-### C. Prevención de Ataques de Enumeración (Card Enumeration Side-Channel)
-- En sistemas financieros sin autenticación de usuario (`customer_id`), colocar un constraint `UNIQUE` global al PAN en la base de datos es un anti-patrón de seguridad. Permitiría a atacantes enviar peticiones POST y deducir qué tarjetas de crédito existen en el sistema según la respuesta de la API (`409 Conflict`).
-- Por tanto, la prevención de duplicados por reintentos de red o envíos accidentales se resuelve **únicamente a nivel de petición HTTP mediante el header `Idempotency-Key`**.
+### C. Prevención de Enumeración & Rate Limiting (Anti-Brute Force)
+- Sin autenticación de usuario (`customer_id`), no se aplica `UNIQUE` constraint global al PAN para evitar vulnerabilidades de **Card Enumeration Side-Channel** (descubrimiento de tarjetas mediante peticiones POST).
+- Se aplica **`express-rate-limit`** en las rutas `/cards` y especialmente `/cards:search` (máximo 30 peticiones por minuto por IP) para impedir ataques de fuerza bruta sobre los últimos 4 dígitos.
 
 ---
 
 ## 2. Decisiones de Arquitectura y Patrones
 
-### ADR-001 — Paradigma 100% Programación Funcional (FP) & Patrón `Result<T, E>`
-
-**Contexto.** Queremos una arquitectura ligera, modular y ultra-testeable sin la sobre-ingeniería de clases abstractas o contenedores de Inyección de Dependencias pesados.
-
-**Decisión.** Estructurar el dominio y la aplicación usando Programación Funcional (FP) con módulos de funciones puras e inmutables. Toda función de servicio retornará un tipo explícito `Result<T, E>` (`ok(value)` / `err(error)`). Ninguna función de servicio o dominio lanzará excepciones `throw`.
-
-**Beneficios.**
-- Los errores son parte del tipo de retorno, obligando a manejarlos de forma explícita (estilo Go / Elixir).
-- Cero `try/catch` difusos en la capa de negocio.
-- Testing unitario 100% directo sin necesidad de mocks complejos.
+### ADR-001 — Paradigma 100% Programación Funcional (FP), Zod & Patrón `Result<T, E>`
+- Estructuración con módulos de funciones puras.
+- Validación de entradas HTTP mediante **`zod`** (tipado estático directo y mensajes RFC 7807).
+- Toda función de servicio o utilidad devuelve `Result<T, E>` (`ok(value)` / `err(error)`). Cero `throw` en la capa de negocio.
 
 ---
 
-### ADR-002 — Paginación Profesional por Cursor basada en UUIDv7
+### ADR-002 — Idempotencia Atómica con Estados (`in_progress` / `completed`)
 
-**Contexto.** La paginación tradicional por `OFFSET` sufre degradación de rendimiento en tablas grandes y problemas de *page drift* cuando se insertan registros mientras el cliente navega.
-
-**Decisión.** Adoptar UUIDv7 como identificador primario de las tarjetas. UUIDv7 incorpora un timestamp de 48 bits (milisegundos Unix) en sus primeros bytes, garantizando que los UUIDs estén ordenados cronológicamente de forma nativa (`ORDER BY id DESC`/`ASC`).
-
-**Formato de Respuesta de Paginación:**
-```json
-{
-  "data": [...],
-  "pagination": {
-    "limit": 10,
-    "nextCursor": "eyJpZCI6IjAxOTEzN2UwLTkxMTEtNzMzMy04YmJiLTEyMzQ1Njc4OWFiYyJ9",
-    "prevCursor": null,
-    "hasMore": true
-  }
-}
+**Schema de la tabla `idempotency_keys`:**
+```sql
+CREATE TABLE idempotency_keys (
+    key VARCHAR(255) PRIMARY KEY,
+    request_hash VARCHAR(64) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'in_progress', -- 'in_progress' | 'completed'
+    status_code INT,
+    response_body JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
+);
 ```
+
+**Manejo de Concurrencia:**
+1. Al recibir `Idempotency-Key`, realiza `INSERT ... ON CONFLICT (key) DO NOTHING`.
+2. Si no inserta fila, la clave ya existe:
+   - Si `status === 'completed'` y `request_hash` coincide: Devuelve la respuesta devuelta previamente (Cache replay).
+   - Si `status === 'completed'` pero `request_hash` es distinto: Devuelve `422 Unprocessable Entity` (conflicto de payload).
+   - Si `status === 'in_progress'`: Devuelve `409 Conflict` (petición concurrente en vuelo).
 
 ---
 
-### ADR-003 — Formato de Errores RFC 7807 (Problem Details)
+### ADR-003 — Healthchecks Separados: Liveness (`/health`) vs Readiness (`/health/ready`)
 
-**Contexto.** La API requiere un formato estándar internacional para la devolución de errores HTTP.
+- **`GET /health` (Liveness)**: Comprobación superficial (*shallow*). Retorna `{ status: "OK", instanceId }`. Utilizado exclusivamente por el AWS Application Load Balancer (ALB) Target Group. Garantiza que la latencia o saturación temporal de Postgres no provoque que el ALB destruya los contenedores.
+- **`GET /health/ready` (Readiness)**: Comprobación profunda (*deep*). Toca la base de datos Postgres (`SELECT 1`). Devuelve `{ status: "OK", database: "connected", instanceId }`.
 
-**Decisión.** Toda respuesta de error (400, 404, 409, 500) se formateará según el estándar RFC 7807 (`Content-Type: application/problem+json`):
-```json
-{
-  "type": "https://api.cards.local/errors/invalid-pan",
-  "title": "Bad Request",
-  "status": 400,
-  "detail": "The provided PAN failed the Luhn checksum validation algorithm",
-  "instance": "/cards"
-}
-```
+---
+
+### ADR-004 — Graceful Shutdown (SIGTERM / SIGINT)
+
+- La aplicación captura señales `SIGTERM` y `SIGINT` para drenar conexiones HTTP activas y cerrar el pool de conexiones de PostgreSQL limpiamente (`pool.end()`), garantizando desplegados cero-downtime en AWS ECS Fargate.
+
+---
+
+### ADR-005 — Escape de Ruta en Express para `/cards:search`
+
+- En Express 4, la ruta `/cards:search` utiliza la sintaxis `/cards\\:search` para evitar que `path-to-regexp` interprete `:search` como un parámetro de ruta dinámico (`req.params.search`).
