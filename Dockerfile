@@ -29,6 +29,7 @@ RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=builder /app/dist ./dist
 COPY migrations ./migrations
+COPY openapi.yaml ./openapi.yaml
 
 ENV NODE_ENV=production
 ENV PORT=3000

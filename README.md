@@ -88,6 +88,8 @@ To enable automatic deployments on `push` to the `main` branch, configure the fo
 
 ## 📖 API Documentation
 
+Interactive docs (OpenAPI 3.0 via Swagger UI): **[api.danviviendo.com/docs](https://api.danviviendo.com/docs)**. It reads `openapi.yaml` from the repo at boot, so it's always in sync with whatever's actually deployed — no separate publish step. Click "Try it out" on any endpoint to fire real requests against the live API, e.g. for a frontend team integrating against it. To update it: edit `openapi.yaml`, commit, the next deploy picks it up.
+
 All examples below hit the live deployment at `https://api.danviviendo.com`. Swap the host for `http://localhost:3000` to run them against your local server.
 
 Every response is masked (`**** **** **** 1234`) — the full PAN is never returned by any endpoint, and there is no endpoint that reveals it. Every error follows [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) (`Content-Type: application/problem+json`).
@@ -182,7 +184,7 @@ Fetch the next page with `?limit=2&cursor=<nextCursor from above>`.
 
 ### 4. Search by last 4 digits — `GET /cards:search?last4=`
 
-`last4` must be exactly 4 numeric digits, or the request fails with `400` before hitting the database. This endpoint is rate-limited (see below).
+`last4` must be exactly 4 numeric digits, or the request fails with `400` before hitting the database. This endpoint is rate-limited at the ALB (see below), not in the app.
 
 ```bash
 curl "https://api.danviviendo.com/cards:search?last4=9903"
@@ -206,16 +208,19 @@ curl "https://api.danviviendo.com/cards:search?last4=9903"
 
 ### 5. Rate limiting on search
 
-`GET /cards:search` is limited to 30 requests/minute per IP (`express-rate-limit`, standard `RateLimit-*` response headers). It's scoped to this one endpoint on purpose: `last4` only has 10,000 possible values, so unrestricted search is a card-enumeration side channel — the other endpoints don't have that specific risk and aren't limited.
+`GET /cards:search` (and `/cards/search`) is limited to ~30 requests/minute per IP (150 per 5-minute window — WAF's rate window is fixed at 5 minutes) via an **AWS WAF rate-based rule** on the ALB (`terraform/waf.tf`), scoped to just those two paths — the rest of the API is unaffected. `last4` only has 10,000 possible values, so unrestricted search is a card-enumeration side channel; the other endpoints don't have that specific risk.
 
-**Known limitation:** the limiter's counter is in-memory per process. With 2 ECS replicas behind the ALB, each task tracks its own count independently, so the *effective* ceiling across the service is closer to 60/min than the configured 30/min, depending on how the ALB happens to distribute a given burst. Confirmed by hitting the counter directly — the `remaining` value goes up and down non-monotonically as requests land on alternating tasks instead of counting down in one straight line:
+This used to be an in-app `express-rate-limit` middleware, but its counter was in-memory per process — with 2 ECS replicas, each task counted independently, so the *effective* ceiling was closer to 60/min than the configured 30/min, and it would only get less accurate with more replicas. Moving enforcement to WAF fixes that: it's evaluated once per request at the edge, before anything reaches an ECS task, so it's correct regardless of how many replicas are running. See `DECISIONS.md` §7 for the full comparison against the alternatives (Redis, ALB stickiness) and why WAF won.
+
+A blocked request gets the same `application/problem+json` shape as every other error in this API (configured via WAF's `custom_response_body`), even though the request never reaches Express:
+```json
+{
+  "type": "https://api.cards.local/errors/rate-limit-exceeded",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "Rate limit exceeded for last4 search. Try again shortly."
+}
 ```
-req 1  -> remaining=11
-req 2  -> remaining=12   (different task, its own counter)
-req 3  -> remaining=11
-...
-```
-Fixing this for real means a shared store (Redis) instead of the default in-memory one — noted, not done, since the endpoint doesn't expose anything more sensitive than "does this last-4 exist," and the assessment didn't call for a Redis dependency.
 
 ### 6. Health checks — `GET /health` and `GET /health/ready`
 

@@ -6,16 +6,16 @@ import {
   searchByLast4Handler,
 } from '../controllers/card.controller';
 import { idempotencyMiddleware } from '../middleware/idempotency';
-import { searchRateLimiter } from '../middleware/rateLimiter';
 
 export const cardRouter = Router();
 
 // POST /cards -> Creates card (with atomic idempotency)
 cardRouter.post('/cards', idempotencyMiddleware, createCardHandler);
 
-// GET /cards:search?last4= and /cards/search?last4= -> Search by last 4 digits (with rate limiter)
-cardRouter.get('/cards\\:search', searchRateLimiter, searchByLast4Handler);
-cardRouter.get('/cards/search', searchRateLimiter, searchByLast4Handler);
+// GET /cards:search?last4= and /cards/search?last4= -> Search by last 4 digits
+// Rate limiting lives at the edge now (AWS WAF on the ALB), not here — see DECISIONS.md.
+cardRouter.get('/cards\\:search', searchByLast4Handler);
+cardRouter.get('/cards/search', searchByLast4Handler);
 
 // GET /cards?limit=&cursor= -> Lists cards with UUIDv7 opaque Base64 cursor pagination
 cardRouter.get('/cards', listCardsHandler);
