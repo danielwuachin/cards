@@ -9,6 +9,7 @@ This document covers the core architectural, security, and PCI-DSS-relevant deci
 - **Serverless compute:** Fargate removes the operational overhead of managing underlying EC2 instances.
 - **Rolling updates, zero downtime:** the ECS service has `deployment_circuit_breaker { enable = true, rollback = true }`. If a new task definition fails its ALB health check (`/health`), ECS automatically rolls back to the last healthy revision instead of leaving production degraded.
 - **Private subnets:** all containers and the RDS instance live in private subnets. Only the ALB is exposed to the internet.
+- **Autoscaling by request volume, not CPU** (`terraform/autoscaling.tf`): an `aws_appautoscaling_target` (2–6 tasks) with a target-tracking policy on `ALBRequestCountPerTarget`, not CPU utilization — this API's bottleneck under load is request throughput, so scaling on the metric that actually reflects load reacts faster and more accurately than waiting for CPU to climb. `min_capacity = 2` never drops below the assessment's replica requirement. The ECS service has `lifecycle { ignore_changes = [desired_count] }` so Terraform stops fighting the autoscaler's live task count on every `apply`.
 
 ## 2. Infrastructure as Code (Terraform) & GitOps
 **Context:** The deployment process needed to be automated, secure, and reproducible.

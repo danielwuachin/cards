@@ -107,4 +107,11 @@ resource "aws_ecs_service" "app" {
   depends_on = [
     aws_lb_listener.http
   ]
+
+  # Autoscaling (terraform/autoscaling.tf) changes the running task count
+  # directly — without this, every `terraform apply` would fight it back
+  # down to the desired_count fixed above.
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
 }
