@@ -36,7 +36,7 @@ resource "aws_db_instance" "main" {
   instance_class       = "db.t3.micro"
   db_name              = "cardsdb"
   username             = var.db_username
-  password             = var.db_password
+  password             = random_password.db_password.result
   parameter_group_name = "default.postgres15"
   skip_final_snapshot  = true
 

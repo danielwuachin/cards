@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "project_name" {
@@ -20,16 +20,4 @@ variable "db_username" {
   description = "Database admin username"
   type        = string
   default     = "cardsadmin"
-}
-
-variable "db_password" {
-  description = "Database admin password"
-  type        = string
-  sensitive   = true
-}
-
-variable "card_encryption_key" {
-  description = "Base64 32-byte encryption key for cards"
-  type        = string
-  sensitive   = true
 }
